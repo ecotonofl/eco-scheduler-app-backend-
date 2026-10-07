@@ -3,7 +3,12 @@
   "version": "1.0.0",
   "main": "server.js",
   "type": "module",
-  "scripts": { "start": "node server.js" },
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test",
+    "db:backup": "node scripts/database.js backup",
+    "db:restore": "node scripts/database.js restore"
+  },
   "dependencies": {
     "body-parser": "^1.20.2",
     "cors": "^2.8.5",
@@ -11,5 +16,8 @@
     "socket.io": "^4.7.2",
     "sqlite": "^4.2.1",
     "sqlite3": "^5.1.7"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }
