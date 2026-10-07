@@ -28,11 +28,16 @@ const init = async () => {
     coc_link TEXT DEFAULT '',
     driver TEXT DEFAULT '',
     scheduled_date TEXT NOT NULL,
+    scheduled_time TEXT DEFAULT '',
     arrival_time TEXT DEFAULT '',
     leaving_time TEXT DEFAULT '',
     miles REAL DEFAULT 0,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
   )`);
+  const columns = await db.all("PRAGMA table_info(tasks)");
+  if (!columns.some(column => column.name === "scheduled_time")) {
+    await db.exec("ALTER TABLE tasks ADD COLUMN scheduled_time TEXT DEFAULT ''");
+  }
   const row = await db.get("SELECT COUNT(*) AS n FROM tasks");
   if (!row.n) {
     await db.run(`INSERT INTO tasks (stop_number,work_type,company,address,contact_name,contact_phone,instructions,lab,driver,scheduled_date)
@@ -52,16 +57,18 @@ app.get("/api/tasks", async (req,res)=>{
 });
 app.post("/api/tasks", async (req,res)=>{
   const db=await dbPromise; const b=req.body;
-  const result=await db.run(`INSERT INTO tasks (stop_number,status,work_type,company,address,contact_name,contact_phone,instructions,lab,coc_link,driver,scheduled_date,miles)
-  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,[b.stop_number||1,b.status||"Pending",b.work_type,b.company,b.address,b.contact_name||"",b.contact_phone||"",b.instructions||"",b.lab||"",b.coc_link||"",b.driver||"",b.scheduled_date,b.miles||0]);
+  if (b.scheduled_time != null && b.scheduled_time !== "" && !/^([01][0-9]|2[0-3]):[0-5][0-9]$/.test(b.scheduled_time)) return res.status(400).json({error:"Scheduled time must use HH:mm"});
+  const result=await db.run(`INSERT INTO tasks (stop_number,status,work_type,company,address,contact_name,contact_phone,instructions,lab,coc_link,driver,scheduled_date,scheduled_time,miles)
+  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,[b.stop_number||1,b.status||"Pending",b.work_type,b.company,b.address,b.contact_name||"",b.contact_phone||"",b.instructions||"",b.lab||"",b.coc_link||"",b.driver||"",b.scheduled_date,b.scheduled_time||"",b.miles||0]);
   const task=await db.get("SELECT * FROM tasks WHERE id=?",result.lastID); io.emit("taskUpdated",task); res.status(201).json(task);
 });
 app.put("/api/tasks/:id", async (req,res)=>{
   const db=await dbPromise; const existing=await db.get("SELECT * FROM tasks WHERE id=?",req.params.id);
   if(!existing) return res.status(404).json({error:"Task not found"});
   const t={...existing,...req.body};
-  await db.run(`UPDATE tasks SET stop_number=?,status=?,work_type=?,company=?,address=?,contact_name=?,contact_phone=?,instructions=?,lab=?,coc_link=?,driver=?,scheduled_date=?,arrival_time=?,leaving_time=?,miles=? WHERE id=?`,
-  [t.stop_number,t.status,t.work_type,t.company,t.address,t.contact_name,t.contact_phone,t.instructions,t.lab,t.coc_link,t.driver,t.scheduled_date,t.arrival_time,t.leaving_time,t.miles,t.id]);
+  if (t.scheduled_time != null && t.scheduled_time !== "" && !/^([01][0-9]|2[0-3]):[0-5][0-9]$/.test(t.scheduled_time)) return res.status(400).json({error:"Scheduled time must use HH:mm"});
+  await db.run(`UPDATE tasks SET stop_number=?,status=?,work_type=?,company=?,address=?,contact_name=?,contact_phone=?,instructions=?,lab=?,coc_link=?,driver=?,scheduled_date=?,scheduled_time=?,arrival_time=?,leaving_time=?,miles=? WHERE id=?`,
+  [t.stop_number,t.status,t.work_type,t.company,t.address,t.contact_name,t.contact_phone,t.instructions,t.lab,t.coc_link,t.driver,t.scheduled_date,t.scheduled_time||"",t.arrival_time,t.leaving_time,t.miles,t.id]);
   const task=await db.get("SELECT * FROM tasks WHERE id=?",t.id); io.emit("taskUpdated",task); res.json(task);
 });
 app.delete("/api/tasks/:id", async(req,res)=>{const db=await dbPromise;await db.run("DELETE FROM tasks WHERE id=?",req.params.id);io.emit("taskDeleted",Number(req.params.id));res.status(204).end()});
